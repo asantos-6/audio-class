@@ -9,14 +9,18 @@ import torch
 import torchaudio
 import os
 import scipy
+import wave
+import io
 
 class Audio:
-    def __init__(self, file_path=None, ndarray=None, sample_rate=None):
+    def __init__(self, file_path=None, ndarray=None, sample_rate=None, stereo=False):
         self.file_path = file_path
         self.ndarray = ndarray
         self.sample_rate = sample_rate
+        self.sr = sample_rate
         self.num_samples = None
         self.duration_seconds = None
+        self.stereo = stereo
 
         if self.file_path and self.ndarray is None:
             self.load()
@@ -26,12 +30,39 @@ class Audio:
     def __repr__(self):
         return (f"Audio(file_path='{self.file_path}', "
                 f"sample_rate={self.sample_rate}, "
+                f"sr={self.sr}, "
                 f"num_samples={self.num_samples}, "
                 f"duration_seconds={self.duration_seconds:.2f})")
 
     def play(self):
         if self.ndarray.any():
-            return display(ipd.Audio(self.ndarray, rate=self.sample_rate, autoplay=True))
+            if not self.stereo:
+                return display(ipd.Audio(self.ndarray, rate=self.sample_rate, autoplay=True))
+            else:
+                normalized_ndarray = np.int16(self.ndarray * (32767 / np.max(np.abs(self.ndarray))))
+
+                # Create a byte stream
+                byte_stream = io.BytesIO()
+                
+                # Create a WAV file using wave module
+                with wave.open(byte_stream, 'wb') as wav_file:
+                    wav_file.setnchannels(2)  # Stereo
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(self.sample_rate)
+                    wav_file.writeframes(normalized_ndarray.tobytes())
+
+                # Set the stream position to the beginning
+                byte_stream.seek(0)
+
+                # Display the audio using ipd.Audio
+                return ipd.display(ipd.Audio(byte_stream.read(), rate=self.sample_rate/2, autoplay=True))
+        else:
+            raise ValueError("Audio ndarray is not loaded.")
+        
+    @classmethod
+    def play_ndarray(cls, ndarray, sample_rate=22050):
+        if ndarray.any():
+            return ipd.display(ipd.Audio(ndarray, rate=sample_rate, autoplay=True))
         else:
             raise ValueError("Audio ndarray is not loaded.")
         
@@ -95,26 +126,51 @@ class Audio:
 
         self.setSameLength(audio_to_mix)
 
-        mixed_audio = self.ndarray + audio_to_mix.ndarray * mixing_factor
+        #ndarray1, ndarray2 = self.synchAudio(audio_to_mix)
+        ndarray1 = self.ndarray
+        ndarray2 = audio_to_mix.ndarray
 
-        return Audio(ndarray=mixed_audio, sample_rate=self.sample_rate)
+        mixed_audio_left = ndarray1
+        mixed_audio_right = ndarray2 * mixing_factor
+
+
+        mixed_audio_stereo = np.vstack((mixed_audio_left, mixed_audio_right)).T
+
+        return Audio(ndarray=mixed_audio_stereo, sample_rate=self.sample_rate, stereo=True)
     
     def synchAudio(self, audio_to_synch_with, lag=0):
         self.checkSampleRateCompatibility(audio_to_synch_with, "audio_to_synch_with")
 
+        o_env1 = librosa.onset.onset_strength(y=self.ndarray, sr=self.sample_rate)
+        o_env2 = librosa.onset.onset_strength(y=audio_to_synch_with.ndarray, sr=audio_to_synch_with.sample_rate)
+
+        times = librosa.times_like(o_env1, sr=self.sample_rate)
+
+        onset_frames1 = librosa.onset.onset_detect(onset_envelope=o_env1, sr=self.sample_rate)
+        onset_frames2 = librosa.onset.onset_detect(onset_envelope=o_env2, sr=audio_to_synch_with.sample_rate)
+
+        onset_binary1 = [1 if t in times[onset_frames1] else 0 for t in times]
+        onset_binary2 = [1 if t in times[onset_frames2] else 0 for t in times]
+
         if lag == 0:
-            cross_correlation = scipy.signal.correlate(self.ndarray, audio_to_synch_with.ndarray, mode='full')
+            cross_correlation = scipy.signal.correlate(onset_binary1, onset_binary2, mode='full')
 
-            lag = np.argmax(cross_correlation) - len(self.ndarray) + 1
+            lag = int((np.argmax(cross_correlation) - len(self.ndarray) - 1))
+        else:
+            lag = int(- lag * self.sample_rate)
 
+        print(lag)
         audio1_adjusted = self.ndarray
         audio2_adjusted = audio_to_synch_with.ndarray
+
         if lag > 0:
-            audio1_adjusted = self.ndarray[lag:]
-            audio2_adjusted = audio_to_synch_with.ndarray[:len(audio1_adjusted)]
+            ndarray1 = self.ndarray[lag:]
+            ndarray2 = audio_to_synch_with.ndarray[:len(audio1_adjusted)]
         elif lag < 0:
-            audio2_adjusted = audio_to_synch_with.ndarray[-lag:]
-            audio1_adjusted = self.ndarray[:len(audio2_adjusted)]
+            ndarray1 = audio_to_synch_with.ndarray[-lag:]
+            ndarray2 = self.ndarray[:len(audio2_adjusted)]
+
+        return ndarray1, ndarray2
 
     def setSameLength(self, audio_to_pad):
         length = max(len(self.ndarray), len(audio_to_pad.ndarray))
