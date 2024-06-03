@@ -103,7 +103,21 @@ class Audio:
             start_sample = int(start_time * self.sample_rate)
             end_sample = int(end_time * self.sample_rate)
             self.ndarray = self.ndarray[start_sample:end_sample]
+
+    def normalize(self):
+        max_amplitude = np.max(np.abs(self.ndarray))  # Find the maximum peak
+        if max_amplitude == 0:  # Prevent division by zero
+            return self.ndarray  # Return unchanged if audio is silent
+        normalization_factor = 1.0 / max_amplitude  # Calculate normalization factor
+        self.ndarray = self.ndarray * normalization_factor  # Apply normalization
     
+    def apply_compression(self, threshold=0.8, ratio=4):
+        # Apply simple compression to an audio signal
+        for i in range(len(self.ndarray)):
+            if abs(self.ndarray[i]) > threshold:
+                # Apply compression above the threshold
+                self.ndarray[i] = np.sign(self.ndarray[i]) * (threshold + (abs(self.ndarray[i]) - threshold) / ratio)
+        
     def limitVolume(self, max_volume_dBFS=-20):
         current_volume_dBFS = 10 * np.log10(np.mean(self.ndarray ** 2))
 
