@@ -117,6 +117,19 @@ class Audio:
             if abs(self.ndarray[i]) > threshold:
                 # Apply compression above the threshold
                 self.ndarray[i] = np.sign(self.ndarray[i]) * (threshold + (abs(self.ndarray[i]) - threshold) / ratio)
+
+    def apply_fadeout(self):
+        # convert to audio indices (samples)
+        end = len(self.ndarray)
+        length = end // 2
+        start = end - length
+
+        # compute fade out curve
+        # linear fade
+        fade_curve = np.linspace(1.0, 0.0, length)
+
+        # apply the curve
+        self.ndarray[start:end] = self.ndarray[start:end] * fade_curve
         
     def limitVolume(self, max_volume_dBFS=-20):
         current_volume_dBFS = 10 * np.log10(np.mean(self.ndarray ** 2))
