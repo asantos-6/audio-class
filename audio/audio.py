@@ -5,12 +5,13 @@ import librosa.display
 import numpy as np
 #import madmom
 import matplotlib.pyplot as plt
-#import torch
-#import torchaudio
+import torch
+import torchaudio
 import os
 import scipy
 import wave
 import io
+from madmom.audio.spectrogram import LogarithmicFilteredSpectrogram
 
 class Audio:
     def __init__(self, file_path=None, ndarray=None, sample_rate=None, stereo=False):
@@ -67,21 +68,40 @@ class Audio:
             raise ValueError("Audio ndarray is not loaded.")
         
     def load(self, mono=True):
-        self.ndarray, self.sample_rate = librosa.load(self.file_path, mono=mono)
+
+        self.ndarray, self.sample_rate = librosa.load(self.file_path, mono=mono, sr=self.sample_rate)
 
     def save(self, file_path=None):
+        from scipy.io import wavfile
+
+        if file_path:  # If a file path is provided, use the original behavior
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            wavfile.write(file_path, self.sample_rate, self.ndarray.astype(np.float32))
+        else:
+            # Use a BytesIO buffer instead of a file
+            buffer = io.BytesIO()
+            wavfile.write(buffer, self.sample_rate, self.ndarray.astype(np.float32))
+            buffer.seek(0)  # Move to the start of the buffer for reading if needed
+            
+            # You can return or use the buffer for further processing
+            return buffer
+        return
+
+    def save_ndarray(self, file_path=None):
         if not file_path:
             if not self.file_path:
                 raise ValueError("File path must be provided.")
             file_path = self.file_path
-        
+            
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        scipy.io.wavfile.write(file_path, self.sample_rate, self.ndarray.astype(np.float32))
+        np.save(file_path, self.ndarray)
 
     def plot(self):
         plt.figure(figsize=(14, 5))
         librosa.display.waveshow(self.ndarray, sr=self.sample_rate)
 
+    def spectrogram(self, **kwargs):
+        return LogarithmicFilteredSpectrogram(self.file_path, **kwargs)
 
     def plotSpectrogram(self):
         X = librosa.stft(self.ndarray)
@@ -104,6 +124,13 @@ class Audio:
             end_sample = int(end_time * self.sample_rate)
             self.ndarray = self.ndarray[start_sample:end_sample]
 
+            self.calculateSamplesAndSeconds()  
+
+    def to_tensor(self):
+        tensor = torch.from_numpy(self.ndarray)
+        # return torchaudio.transforms.Resample(self.sample_rate, 16000)(tensor)
+        return tensor
+    
     def normalize(self):
         max_amplitude = np.max(np.abs(self.ndarray))  # Find the maximum peak
         if max_amplitude == 0:  # Prevent division by zero
@@ -311,3 +338,11 @@ def rave_mixing(audio_input, path, drums, no_drums, song, MODEL='GMDrums_v3_29-0
     rave_version.play()
 
     return
+
+def pad_shortest_audio(audio1, audio2):
+    if audio1.num_samples < audio2.num_samples:
+        audio1.ndarray = np.pad(audio1.ndarray, (0, audio2.num_samples - audio1.num_samples), 'constant')
+        audio1.calculateSamplesAndSeconds()
+    else:
+        audio2.ndarray = np.pad(audio2.ndarray, (0, audio1.num_samples - audio2.num_samples), 'constant')
+        audio2.calculateSamplesAndSeconds() 
