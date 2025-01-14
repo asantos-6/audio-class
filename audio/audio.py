@@ -26,7 +26,7 @@ class Audio:
         if self.file_path and self.ndarray is None:
             self.load()
 
-        self.calculateSamplesAndSeconds()        
+        self.calculate_samples_and_seconds()        
 
     def __repr__(self):
         return (f"Audio(file_path='{self.file_path}', "
@@ -103,13 +103,38 @@ class Audio:
     def spectrogram(self, **kwargs):
         return LogarithmicFilteredSpectrogram(self.file_path, **kwargs)
 
-    def plotSpectrogram(self):
-        X = librosa.stft(self.ndarray)
+    def plot_spectrogram(self, title=None, time_range=None):
+        """
+        Plots the spectrogram of self.ndarray.
+        
+        :param title: (Optional) title for the plot.
+        :param time_range: (Optional) tuple of (start_sec, end_sec).
+                        If provided, the spectrogram will be plotted 
+                        only for this time range in seconds.
+        """
+        # If time_range is provided, slice self.ndarray accordingly
+        if time_range is not None:
+            start_sec, end_sec = time_range
+            start_sample = int(start_sec * self.sample_rate)
+            end_sample = int(end_sec * self.sample_rate)
+            end_sample = min(end_sample, len(self.ndarray))  # Safety check
+            audio_data = self.ndarray[start_sample:end_sample]
+        else:
+            audio_data = self.ndarray
+
+        # Compute STFT on the sliced array (or the full array if no range given)
+        X = librosa.stft(audio_data)
         Xdb = librosa.amplitude_to_db(abs(X))
+
+        # Plot
         plt.figure(figsize=(14, 5))
         librosa.display.specshow(Xdb, sr=self.sample_rate, x_axis='time', y_axis='log')
+        
+        if title:
+            plt.title(title)
+        plt.show()
 
-    def calculateSamplesAndSeconds(self):
+    def calculate_samples_and_seconds(self):
         if not self.ndarray.any():
             raise ValueError("No audio ndarray found.")
         self.num_samples = len(self.ndarray)
@@ -124,7 +149,7 @@ class Audio:
             end_sample = int(end_time * self.sample_rate)
             self.ndarray = self.ndarray[start_sample:end_sample]
 
-            self.calculateSamplesAndSeconds()  
+            self.calculate_samples_and_seconds()  
 
     def to_tensor(self):
         tensor = torch.from_numpy(self.ndarray)
@@ -342,7 +367,7 @@ def rave_mixing(audio_input, path, drums, no_drums, song, MODEL='GMDrums_v3_29-0
 def pad_shortest_audio(audio1, audio2):
     if audio1.num_samples < audio2.num_samples:
         audio1.ndarray = np.pad(audio1.ndarray, (0, audio2.num_samples - audio1.num_samples), 'constant')
-        audio1.calculateSamplesAndSeconds()
+        audio1.calculate_samples_and_seconds()
     else:
         audio2.ndarray = np.pad(audio2.ndarray, (0, audio1.num_samples - audio2.num_samples), 'constant')
-        audio2.calculateSamplesAndSeconds() 
+        audio2.calculate_samples_and_seconds() 
