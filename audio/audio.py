@@ -182,7 +182,28 @@ class Audio:
 
         # apply the curve
         self.ndarray[start:end] = self.ndarray[start:end] * fade_curve
-        
+
+    def apply_adsr(self, attack_time=0.0025, decay_time=0.25, sustain_level=0.5, release_time=0.725):
+        # Convert times from percentage to samples
+        attack_samples = int(attack_time * self.num_samples)
+        decay_samples = int(decay_time * self.num_samples)
+        release_samples = int(release_time * self.num_samples)
+        sustain_samples = self.num_samples - (attack_samples + decay_samples + release_samples)
+
+        if sustain_samples < 0:
+            raise ValueError("The sum of attack, decay, and release times exceeds the audio length.")
+
+        # Create the ADSR envelope
+        envelope = np.concatenate([
+            np.linspace(0, 1, attack_samples),  # Attack
+            np.linspace(1, sustain_level, decay_samples),  # Decay
+            np.full(sustain_samples, sustain_level),  # Sustain
+            np.linspace(sustain_level, 0, release_samples)  # Release
+        ])
+
+        # Apply the envelope to the audio signal
+        self.ndarray *= envelope
+
     def limitVolume(self, max_volume_dBFS=-20):
         current_volume_dBFS = 10 * np.log10(np.mean(self.ndarray ** 2))
 
