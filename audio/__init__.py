@@ -1,3 +1,5 @@
+from .audio import Audio
+
 song_dict = {
     "ac_dc": "../data/original_tracks/ac_dc-back_in_black.mp3",
     "amy_winehouse": "../data/original_tracks/amy_winehouse_tears_dry_on_their_own_-444172331065337357.mp3",
