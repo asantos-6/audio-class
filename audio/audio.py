@@ -75,7 +75,7 @@ class Audio:
         from scipy.io import wavfile
 
         if file_path:  # If a file path is provided, use the original behavior
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            # os.makedirs(os.path.dirname(file_path), exist_ok=True)
             wavfile.write(file_path, self.sample_rate, self.ndarray.astype(np.float64))
         else:
             # Use a BytesIO buffer instead of a file
@@ -223,18 +223,17 @@ class Audio:
 
     def mixAudio(self, audio_to_mix, mixing_factor=1.0):
         self.checkSampleRateCompatibility(audio_to_mix, "audio_to_mix")
-
         self.setSameLength(audio_to_mix)
 
-        #ndarray1, ndarray2 = self.synchAudio(audio_to_mix)
-        ndarray1 = self.ndarray
-        ndarray2 = audio_to_mix.ndarray
+        # Normalize both audio arrays
+        def normalize(arr):
+            max_amp = np.max(np.abs(arr))
+            return arr if max_amp == 0 else arr / max_amp
 
-        mixed_audio_left = ndarray1
-        mixed_audio_right = ndarray2 * mixing_factor
+        ndarray1 = normalize(self.ndarray)
+        ndarray2 = normalize(audio_to_mix.ndarray) * mixing_factor
 
-
-        mixed_audio_stereo = np.vstack((mixed_audio_left, mixed_audio_right)).T
+        mixed_audio_stereo = np.vstack((ndarray1, ndarray2)).T
 
         return Audio(ndarray=mixed_audio_stereo, sample_rate=self.sample_rate, stereo=True)
     
