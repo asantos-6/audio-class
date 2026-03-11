@@ -100,6 +100,14 @@ class Audio:
         plt.figure(figsize=(14, 5))
         librosa.display.waveshow(self.ndarray, sr=self.sample_rate)
 
+    def calculate_loudness(self):
+        FPS = 100  # frames per second
+        hop_length = self.sample_rate // FPS 
+        frame_length = 2 * hop_length  # default frame length in librosa
+
+        loudness = librosa.feature.rms(y=self.ndarray, frame_length=frame_length, hop_length=hop_length)
+        return loudness.T
+
     def spectrogram(self, **kwargs):
         return LogarithmicFilteredSpectrogram(self.file_path, **kwargs)
 
@@ -134,6 +142,11 @@ class Audio:
             plt.title(title)
         plt.show()
 
+    def calculate_onsets(self):
+        onset_frames = librosa.onset.onset_detect(y=self.ndarray, sr=self.sample_rate)
+        onset_times = librosa.frames_to_time(onset_frames, sr=self.sample_rate)
+        return onset_times
+
     def calculate_samples_and_seconds(self):
         if not self.ndarray.any():
             raise ValueError("No audio ndarray found.")
@@ -149,7 +162,14 @@ class Audio:
             end_sample = int(end_time * self.sample_rate)
             self.ndarray = self.ndarray[start_sample:end_sample]
 
-            self.calculate_samples_and_seconds()  
+            self.calculate_samples_and_seconds()
+
+    def pad(self, new_samples):
+        if new_samples > self.num_samples:
+            padding = new_samples - self.num_samples
+            self.ndarray = np.pad(self.ndarray, (0, padding), mode='constant')
+        self.num_samples = len(self.ndarray)
+        self.duration_seconds = self.num_samples / self.sample_rate
 
     def to_tensor(self):
         tensor = torch.from_numpy(self.ndarray)
