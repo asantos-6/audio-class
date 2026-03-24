@@ -75,7 +75,7 @@ class Audio:
         from scipy.io import wavfile
 
         if file_path:  # If a file path is provided, use the original behavior
-            # os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             wavfile.write(file_path, self.sample_rate, self.ndarray.astype(np.float64))
         else:
             # Use a BytesIO buffer instead of a file
